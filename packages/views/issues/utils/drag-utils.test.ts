@@ -27,6 +27,7 @@ function mk(id: string, position: number): Issue {
     project_id: null,
     position,
     stage: null,
+    on_children_done: "auto",
     start_date: null,
     due_date: null,
     metadata: {},

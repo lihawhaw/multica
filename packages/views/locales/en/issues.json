@@ -620,5 +620,43 @@
     "row_backlog_hint": "keeps the agent paused",
     "row_todo_label": "Todo",
     "row_todo_hint": "starts the agent"
+  },
+  "children_done": {
+    "title": "All {{count}} sub-issues are delivered",
+    "description": "No agent was started for this. What should happen to this issue?",
+    "close": "Close it out → {{status}}",
+    "continue": "Continue with the agent",
+    "dismiss": "Leave it",
+    "toast": {
+      "close": "Rolled the parent up",
+      "continue": "Woke the assignee to continue",
+      "dismiss": "Left the parent as is",
+      "failed": "Could not apply that — try again"
+    },
+    "policy": {
+      "aria": "When sub-issues finish",
+      "options": {
+        "auto": {
+          "label": "Auto",
+          "hint": "Agent- and squad-owned issues still wake as usual. Yours get asked."
+        },
+        "wake": {
+          "label": "Wake me",
+          "hint": "Always start an agent run on this issue."
+        },
+        "notify": {
+          "label": "Just ask",
+          "hint": "Post a receipt and ask. Never starts an agent."
+        },
+        "close": {
+          "label": "Close it out",
+          "hint": "Roll this issue up automatically, no agent, no question."
+        },
+        "off": {
+          "label": "Off",
+          "hint": "Do nothing when sub-issues finish."
+        }
+      }
+    }
   }
 }

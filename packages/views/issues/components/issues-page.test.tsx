@@ -499,6 +499,7 @@ const issueDefaults = {
   project_id: null,
   position: 0,
   stage: null,
+  on_children_done: "auto" as const,
   metadata: {},
   properties: {},
 };

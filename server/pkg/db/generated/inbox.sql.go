@@ -345,6 +345,31 @@ func (q *Queries) GetInboxItemInWorkspace(ctx context.Context, arg GetInboxItemI
 	return i, err
 }
 
+const hasOpenInboxItemForIssueAndType = `-- name: HasOpenInboxItemForIssueAndType :one
+SELECT EXISTS (
+    SELECT 1 FROM inbox_item
+    WHERE workspace_id = $1 AND issue_id = $2 AND type = $3 AND archived = false
+)
+`
+
+type HasOpenInboxItemForIssueAndTypeParams struct {
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	IssueID     pgtype.UUID `json:"issue_id"`
+	Type        string      `json:"type"`
+}
+
+// Idempotency probe for the children-done receipt card (MUL-5472): an
+// unarchived row of this type means the question is already open, so a later
+// child transition must not re-post the receipt. The card recomputes its
+// rollup target when acted on, so the open row stays accurate as children
+// move from in_review to done.
+func (q *Queries) HasOpenInboxItemForIssueAndType(ctx context.Context, arg HasOpenInboxItemForIssueAndTypeParams) (bool, error) {
+	row := q.db.QueryRow(ctx, hasOpenInboxItemForIssueAndType, arg.WorkspaceID, arg.IssueID, arg.Type)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const listArchivedInboxItems = `-- name: ListArchivedInboxItems :many
 SELECT i.id, i.workspace_id, i.recipient_type, i.recipient_id, i.type, i.severity, i.issue_id, i.title, i.body, i.read, i.archived, i.created_at, i.actor_type, i.actor_id, i.details,
        iss.status as issue_status

@@ -42,6 +42,7 @@ function makeIssue(
     project_id: "p1",
     position: 1,
     stage: null,
+    on_children_done: "auto",
     start_date: null,
     due_date: null,
     metadata: {},

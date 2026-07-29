@@ -173,18 +173,35 @@ func TestChildDoneNotificationIsIdempotent(t *testing.T) {
 	}
 }
 
-// TestChildReopenAndDoneFiresAgain — done → in_progress → done IS a real
-// new completion event and should produce a second notification. This
-// captures the "reopen + done counts as a new event" line from MUL-2538.
+// TestChildReopenAndDoneFiresAgain — done → in_progress → done IS a real new
+// completion event. This fixture's parent is unassigned, so it takes the
+// notify path (MUL-5472): the receipt is raised once and stays raised while
+// its question is unanswered, so the reopen cycle must NOT stack a second
+// identical card. Once the owner answers (card archived), the next completion
+// asks again.
 func TestChildReopenAndDoneFiresAgain(t *testing.T) {
 	fx := newChildDoneFixture(t, "in_progress")
+	t.Cleanup(func() {
+		testPool.Exec(context.Background(),
+			`DELETE FROM inbox_item WHERE issue_id = $1`, fx.parent.ID)
+	})
 
 	updateChildStatus(t, fx.child.ID, "done")
 	updateChildStatus(t, fx.child.ID, "in_progress")
 	updateChildStatus(t, fx.child.ID, "done")
 
+	if got := countSystemCommentsOn(t, fx.parent.ID); got != 1 {
+		t.Fatalf("open question must not be re-asked: expected 1 receipt, got %d", got)
+	}
+
+	// Answer it, then complete again — the question is now legitimately new.
+	testPool.Exec(context.Background(),
+		`UPDATE inbox_item SET archived = true WHERE issue_id = $1`, fx.parent.ID)
+	updateChildStatus(t, fx.child.ID, "in_progress")
+	updateChildStatus(t, fx.child.ID, "done")
+
 	if got := countSystemCommentsOn(t, fx.parent.ID); got != 2 {
-		t.Fatalf("expected 2 system comments after reopen+done cycle, got %d", got)
+		t.Fatalf("expected a fresh receipt after the card was resolved, got %d", got)
 	}
 }
 
@@ -370,11 +387,22 @@ func TestChildDoneSkippedWhenParentMember(t *testing.T) {
 
 	updateChildStatus(t, fx.child.ID, "done")
 
-	if got := countSystemCommentsOn(t, fx.parent.ID); got != 0 {
-		t.Errorf("parent with member assignee should not receive a system comment, got %d", got)
+	// MUL-5472 changed this contract. A member-assigned parent used to get
+	// NOTHING — no comment, no inbox row — which is why users reassigned
+	// parents to themselves as a mute switch. It now gets the receipt and an
+	// actionable question. What it still must never get is an agent run: the
+	// receipt names no assignee and starts nothing.
+	if got := countSystemCommentsOn(t, fx.parent.ID); got != 1 {
+		t.Errorf("member-assigned parent should receive one receipt, got %d", got)
 	}
-	if got := countInboxItems(t, userID, fx.parent.ID); got != 0 {
-		t.Errorf("parent with member assignee should not receive an inbox row, got %d", got)
+	if got := countInboxItems(t, userID, fx.parent.ID); got != 1 {
+		t.Errorf("member-assigned parent should receive one actionable inbox row, got %d", got)
+	}
+	content, _, _, _ := systemCommentOn(t, fx.parent.ID)
+	for _, banned := range []string{"mention://agent/", "mention://member/", "mention://squad/"} {
+		if strings.Contains(content, banned) {
+			t.Errorf("receipt must not mention anyone, found %q in: %s", banned, content)
+		}
 	}
 }
 

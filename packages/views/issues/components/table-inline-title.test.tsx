@@ -41,6 +41,7 @@ function makeIssue(title: string): Issue {
     project_id: null,
     position: 1,
     stage: null,
+    on_children_done: "auto",
     start_date: null,
     due_date: null,
     labels: [],

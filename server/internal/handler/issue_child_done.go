@@ -76,7 +76,17 @@ func (h *Handler) notifyParentOfChildDone(ctx context.Context, prev, issue db.Is
 	// last open child of a stage is cancelled. Keying on the transition also
 	// makes a later cancelled -> done edit a no-op (terminal -> terminal), which
 	// avoids a lagging duplicate wake.
-	if isTerminalChildStatus(prev.Status) || !isTerminalChildStatus(issue.Status) {
+	//
+	// The delivered transition (into in_review) is admitted too, for the notify
+	// / close policies only — see resolveOnChildrenDone. It is what stops a
+	// fully agent-run subtree from stalling: agents end their work at
+	// in_review, so an all-terminal state never arrives without a human
+	// clicking through the children first. The wake branch below still requires
+	// the strict terminal barrier, so nothing that PROMOTES work moves earlier
+	// than it does today.
+	enteredTerminal := !isTerminalChildStatus(prev.Status) && isTerminalChildStatus(issue.Status)
+	enteredDelivered := !isDeliveredChildStatus(prev.Status) && isDeliveredChildStatus(issue.Status)
+	if !enteredTerminal && !enteredDelivered {
 		return
 	}
 	parent, err := h.Queries.GetIssue(ctx, issue.ParentIssueID)
@@ -98,21 +108,9 @@ func (h *Handler) notifyParentOfChildDone(ctx context.Context, prev, issue db.Is
 	if parent.Status == "backlog" {
 		return
 	}
-	// Human-assigned parents read their own timeline; an automated system
-	// comment is just noise and there is no agent task to trigger. Skip the
-	// whole notification (comment + mention + inbox row) — MUL-2538.
-	if parent.AssigneeType.Valid && parent.AssigneeType.String == "member" {
-		return
-	}
 
-	// Stage barrier (MUL-3508 / discussion #4320). The notification + assignee
-	// wake fire only when this completion *closes a stage* — i.e. every sibling
-	// in the lowest unfinished stage is now terminal. An unstaged sibling set is
-	// one implicit stage, so this collapses to "wake once when the last
-	// sub-issue finishes" instead of the old fire-on-every-child behavior that
-	// caused the surprise cascade. A completion that does not close a stage is
-	// silent: no comment, no wake. ListChildIssues already reflects this child's
-	// committed `done` status (the status update commits before this runs).
+	// ListChildIssues already reflects this child's committed status (the
+	// status update commits before this runs).
 	children, err := h.Queries.ListChildIssues(ctx, parent.ID)
 	if err != nil {
 		slog.Warn("child done: failed to list siblings for stage barrier",
@@ -121,18 +119,49 @@ func (h *Handler) notifyParentOfChildDone(ctx context.Context, prev, issue db.Is
 			"parent_id", uuidToString(parent.ID))
 		return
 	}
-	if !stageBarrierClosed(children, issue) {
+
+	switch resolveOnChildrenDone(parent, children) {
+	case onChildrenDoneOff:
 		return
+
+	case onChildrenDoneNotify:
+		if !childrenAllDelivered(children) {
+			return
+		}
+		h.postChildrenDoneReceipt(ctx, parent, children)
+
+	case onChildrenDoneClose:
+		if !childrenAllDelivered(children) {
+			return
+		}
+		h.applyChildrenDoneClose(ctx, parent, children)
+
+	default: // onChildrenDoneWake — unchanged behavior
+		// Human-assigned parents read their own timeline; an automated system
+		// comment is just noise and there is no agent task to trigger. Skip the
+		// whole notification (comment + mention + inbox row) — MUL-2538. This
+		// guard belongs to the wake path only: the notify path exists precisely
+		// to reach a human owner, who today gets no signal at all.
+		if parent.AssigneeType.Valid && parent.AssigneeType.String == "member" {
+			return
+		}
+		// Stage barrier (MUL-3508 / discussion #4320). The notification +
+		// assignee wake fire only when this completion *closes a stage* — i.e.
+		// every sibling in the lowest unfinished stage is now terminal. A
+		// completion that does not close a stage is silent: no comment, no wake.
+		if !enteredTerminal || !stageBarrierClosed(children, issue) {
+			return
+		}
+		staged := siblingsAreStaged(children)
+		// When the set is staged and the barrier closed, the completed child is
+		// guaranteed to carry a stage (stageBarrierClosed returns false for an
+		// unstaged completed child in a staged set), so issue.Stage.Int32 is safe.
+		var closedStage int32
+		if staged {
+			closedStage = issue.Stage.Int32
+		}
+		h.postChildDoneComment(ctx, parent, issue, children, staged, closedStage, false)
 	}
-	staged := siblingsAreStaged(children)
-	// When the set is staged and the barrier closed, the completed child is
-	// guaranteed to carry a stage (stageBarrierClosed returns false for an
-	// unstaged completed child in a staged set), so issue.Stage.Int32 is safe.
-	var closedStage int32
-	if staged {
-		closedStage = issue.Stage.Int32
-	}
-	h.postChildDoneComment(ctx, parent, issue, children, staged, closedStage, false)
 }
 
 // notifyParentsOfBatchChildDone emits child-done parent notifications for a
@@ -191,14 +220,35 @@ func (h *Handler) notifyParentsOfBatchChildDone(ctx context.Context, completed [
 		if parent.Status == "backlog" {
 			continue
 		}
-		if parent.AssigneeType.Valid && parent.AssigneeType.String == "member" {
-			continue
-		}
 
 		children, err := h.Queries.ListChildIssues(ctx, parent.ID)
 		if err != nil {
 			slog.Warn("batch child done: failed to list siblings for stage barrier",
 				"error", err, "parent_id", uuidToString(parent.ID))
+			continue
+		}
+
+		// Same policy split as the single-issue path (MUL-5472). The non-wake
+		// policies do not care which child closed which stage — they only ask
+		// whether the whole set is delivered — so they short-circuit the
+		// stage-representative selection below entirely.
+		switch resolveOnChildrenDone(parent, children) {
+		case onChildrenDoneOff:
+			continue
+		case onChildrenDoneNotify:
+			if childrenAllDelivered(children) {
+				h.postChildrenDoneReceipt(ctx, parent, children)
+			}
+			continue
+		case onChildrenDoneClose:
+			if childrenAllDelivered(children) {
+				h.applyChildrenDoneClose(ctx, parent, children)
+			}
+			continue
+		}
+
+		// Wake path — human-assigned parents are skipped here only (MUL-2538).
+		if parent.AssigneeType.Valid && parent.AssigneeType.String == "member" {
 			continue
 		}
 

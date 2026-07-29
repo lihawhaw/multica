@@ -184,6 +184,7 @@ import {
   CancelTaskResponseSchema,
   ChatDraftRestoresResponseSchema,
   ChildIssuesResponseSchema,
+  ChildrenDoneActionResponseSchema,
   CommentsListSchema,
   CommentTriggerPreviewSchema,
   IssueTriggerPreviewSchema,
@@ -858,6 +859,20 @@ export class ApiClient {
       method: "POST",
       body: JSON.stringify(data),
     });
+  }
+
+  /** Answer the "all sub-issues are delivered — now what?" question raised on
+   *  a parent (MUL-5472). The click IS the decision; nothing has to be
+   *  configured before the tree runs. */
+  async childrenDoneAction(
+    id: string,
+    action: "continue" | "close" | "dismiss",
+  ): Promise<{ issue: Issue; action: string }> {
+    const raw = await this.fetch<unknown>(`/api/issues/${id}/children-done-action`, {
+      method: "POST",
+      body: JSON.stringify({ action }),
+    });
+    return ChildrenDoneActionResponseSchema.parse(raw) as { issue: Issue; action: string };
   }
 
   async listChildIssues(id: string): Promise<{ issues: Issue[] }> {

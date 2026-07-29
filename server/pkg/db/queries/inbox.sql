@@ -134,3 +134,14 @@ WHERE workspace_id = $1 AND recipient_type = 'member' AND recipient_id = $2 AND 
 UPDATE inbox_item i SET archived = true
 WHERE i.workspace_id = $1 AND i.recipient_type = 'member' AND i.recipient_id = $2 AND i.archived = false
   AND i.issue_id IN (SELECT id FROM issue WHERE status IN ('done', 'cancelled'));
+
+-- name: HasOpenInboxItemForIssueAndType :one
+-- Idempotency probe for the children-done receipt card (MUL-5472): an
+-- unarchived row of this type means the question is already open, so a later
+-- child transition must not re-post the receipt. The card recomputes its
+-- rollup target when acted on, so the open row stays accurate as children
+-- move from in_review to done.
+SELECT EXISTS (
+    SELECT 1 FROM inbox_item
+    WHERE workspace_id = $1 AND issue_id = $2 AND type = $3 AND archived = false
+);

@@ -513,6 +513,7 @@ const mockIssue: Issue = {
   project_id: null,
   position: 0,
   stage: null,
+  on_children_done: "auto",
   start_date: null,
   due_date: "2026-06-01T00:00:00Z",
   metadata: {},

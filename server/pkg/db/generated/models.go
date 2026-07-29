@@ -637,6 +637,8 @@ type Issue struct {
 	Metadata           []byte             `json:"metadata"`
 	Stage              pgtype.Int4        `json:"stage"`
 	Properties         []byte             `json:"properties"`
+	// Handoff policy applied when this issue's sub-issues close a stage barrier: auto (infer from tree shape) | wake | notify | close | off. See server/internal/handler/issue_child_done.go (MUL-5472).
+	OnChildrenDone string `json:"on_children_done"`
 }
 
 type IssueDependency struct {

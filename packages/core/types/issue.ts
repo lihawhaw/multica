@@ -1,6 +1,9 @@
 import type { Label } from "./label";
 import type { IssuePropertyValues } from "./property";
 
+/** Sub-issue handoff policy stored on a parent issue (MUL-5472). */
+export type OnChildrenDone = "auto" | "wake" | "notify" | "close" | "off";
+
 export type IssueStatus =
   | "backlog"
   | "todo"
@@ -53,6 +56,13 @@ export interface Issue {
   // parent assignee is notified/woken only when every sub-issue in a stage
   // finishes; see server/internal/handler/issue_child_done.go.
   stage: number | null;
+  // What happens when this issue's sub-issues finish (MUL-5472).
+  //   auto   — infer from the tree's shape (default; no configuration needed)
+  //   wake   — always wake the assignee
+  //   notify — receipt + an actionable question, never an agent run
+  //   close  — receipt, then roll the parent up automatically
+  //   off    — nothing
+  on_children_done: OnChildrenDone;
   // Calendar days as date-only "YYYY-MM-DD" (no time, no timezone). Use the
   // helpers in @multica/core/issues/date to format/compare — never `new Date()`
   // + local formatting, which shifts the day by the viewer's offset.

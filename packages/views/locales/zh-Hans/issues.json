@@ -595,5 +595,43 @@
     "row_backlog_hint": "智能体保持暂停",
     "row_todo_label": "Todo",
     "row_todo_hint": "启动智能体"
+  },
+  "children_done": {
+    "title": "{{count}} 个子 issue 已全部交付",
+    "description": "这次没有启动 agent。这个 issue 接下来怎么处理？",
+    "close": "收尾 → {{status}}",
+    "continue": "让 agent 继续",
+    "dismiss": "先放着",
+    "toast": {
+      "close": "已收尾父 issue",
+      "continue": "已唤醒负责人继续",
+      "dismiss": "已保持原样",
+      "failed": "操作失败，请重试"
+    },
+    "policy": {
+      "aria": "子 issue 完成时",
+      "options": {
+        "auto": {
+          "label": "自动判断",
+          "hint": "agent / 小队负责的 issue 照常唤醒；你自己负责的来问你一句。"
+        },
+        "wake": {
+          "label": "唤醒我",
+          "hint": "每次都在这个 issue 上启动一轮 agent。"
+        },
+        "notify": {
+          "label": "只问一句",
+          "hint": "发一条回执并询问，绝不启动 agent。"
+        },
+        "close": {
+          "label": "自动收尾",
+          "hint": "自动流转这个 issue，不启动 agent，也不问。"
+        },
+        "off": {
+          "label": "关闭",
+          "hint": "子 issue 完成时什么都不做。"
+        }
+      }
+    }
   }
 }

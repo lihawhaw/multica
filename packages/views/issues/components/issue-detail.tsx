@@ -59,6 +59,11 @@ import { IssueActionsDropdown, useIssueActions, IssueActionsContextMenu, IssueCo
 import { LabelChip } from "../../labels/label-chip";
 import { IssueAgentActivityIndicator } from "./issue-agent-activity-indicator";
 import { SubIssuesAgentWorkingChip } from "./sub-issues-agent-working-chip";
+import {
+  ChildrenDoneCard,
+  ChildrenDonePolicyMenu,
+  allChildrenDelivered,
+} from "./children-done-card";
 import { ProjectPicker } from "../../projects/components/project-picker";
 import { LocalDirectoryHint } from "../../projects/components/local-directory-hint";
 import { CommentCard } from "./comment-card";
@@ -2498,6 +2503,7 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
                     )}
                   />
                   <div className="ml-auto flex items-center gap-0.5">
+                    <ChildrenDonePolicyMenu issue={issue} />
                     <SubIssueDisplayPopover workspaceProperties={activeWorkspaceProperties} />
                     <Tooltip>
                       <TooltipTrigger
@@ -2516,6 +2522,16 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
                     </Tooltip>
                   </div>
                 </div>
+
+                {/* The in-flow decision raised once every sub-issue is
+                    delivered (MUL-5472). Rendered here, directly above the
+                    rows it is about, so the answer is given in context
+                    instead of pre-configured somewhere else. */}
+                {allChildrenDelivered(childIssues) &&
+                  issue.status !== "done" &&
+                  issue.status !== "cancelled" && (
+                    <ChildrenDoneCard issue={issue} children={childIssues} />
+                  )}
 
                 {/* Inline batch toolbar — appears next to the rows when
                     selections exist, instead of as a far-away fixed bar. */}

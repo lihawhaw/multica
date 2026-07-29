@@ -571,6 +571,14 @@ export const IssueSchema = z.object({
   // Older backends predate `stage`; default to null so a missing field parses
   // cleanly into the non-optional Issue.stage (number | null).
   stage: z.number().nullable().default(null),
+  // Sub-issue handoff policy (MUL-5472). Older backends predate the field and
+  // an unknown future value must not fail the whole issue parse, so anything
+  // outside the known set degrades to "auto" — the inferred default, which is
+  // also what the server does with an unrecognised value.
+  on_children_done: z
+    .enum(["auto", "wake", "notify", "close", "off"])
+    .catch("auto")
+    .default("auto"),
   start_date: z.string().nullable(),
   due_date: z.string().nullable(),
   metadata: IssueMetadataSchema,
@@ -581,6 +589,14 @@ export const IssueSchema = z.object({
   labels: z.array(z.unknown()).optional(),
   created_at: z.string(),
   updated_at: z.string(),
+}).loose();
+
+// POST /api/issues/:id/children-done-action. The echoed issue is what the
+// caller patches into cache, so a malformed body must not be treated as a
+// successful decision — the mutation surfaces the parse failure instead.
+export const ChildrenDoneActionResponseSchema = z.object({
+  issue: IssueSchema,
+  action: z.enum(["continue", "close", "dismiss"]),
 }).loose();
 
 export const ListIssuesResponseSchema = z.object({

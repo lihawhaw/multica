@@ -33,6 +33,7 @@ function makeIssue(id: string, status: Issue["status"]): Issue {
     project_id: null,
     position: id === "child-1" ? 1 : 2,
     stage: null,
+    on_children_done: "auto",
     start_date: null,
     due_date: null,
     metadata: {},

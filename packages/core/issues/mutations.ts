@@ -498,6 +498,34 @@ export function useDeleteIssue() {
   });
 }
 
+/**
+ * Answer the children-done question on a parent (MUL-5472).
+ *
+ * Deliberately NOT optimistic. `continue` starts an agent run and `close`
+ * moves the parent's status server-side after re-reading the children, so the
+ * outcome is not locally predictable — the rollup target depends on whether
+ * every child is accepted or merely delivered, which the server evaluates at
+ * click time. We await the echoed issue and patch from that.
+ */
+export function useChildrenDoneAction(issueId: string) {
+  const qc = useQueryClient();
+  const wsId = useWorkspaceId();
+  return useMutation({
+    mutationFn: (action: "continue" | "close" | "dismiss") =>
+      api.childrenDoneAction(issueId, action),
+    onSuccess: (result) => {
+      qc.setQueryData<Issue>(issueKeys.detail(wsId, issueId), (prev) =>
+        prev ? { ...prev, ...result.issue } : prev,
+      );
+      // The decision can move the parent between status buckets, archive the
+      // inbox card, and (on continue) enqueue a run — none of which this
+      // client can project locally.
+      qc.invalidateQueries({ queryKey: issueKeys.all(wsId) });
+      qc.invalidateQueries({ queryKey: inboxKeys.all(wsId) });
+    },
+  });
+}
+
 export function useBatchUpdateIssues() {
   const qc = useQueryClient();
   const wsId = useWorkspaceId();
